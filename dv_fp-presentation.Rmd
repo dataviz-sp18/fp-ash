@@ -1,0 +1,462 @@
+---
+title: "visualizing scientific results from a study of relational cognition and gesture"
+author: "Misha Ash"
+date: "5/28/2018"
+output: 
+  flexdashboard::flex_dashboard:
+    storyboard: true
+    theme: bootstrap
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(ggraph)
+library(igraph)
+library(waffle)
+library(plotly)
+
+library(ggpubr)
+library(cowplot)
+
+library(wesanderson)
+
+library(tidyverse)
+
+set.seed(1618)
+```
+
+```{r data import, include=FALSE, message = FALSE}
+# tidied ELAN data from study 1 (n=24, 960 observations)
+study_01 <- read_csv("~/R/Data Viz/fp-ash/data/study-01_level-01-data_2018-05-28.csv")
+```
+
+
+### Exploring conceptualization through the lens of spontaneous co-thought gestures produced during abstract relational reasoning. {data-commentary-width=350}
+
+![](/Users/misha/R/Data Viz/fp-ash/resources/intro_image.png)
+
+```{r include = FALSE, eval = FALSE}
+# ! remove video from repo after presentation
+
+# ![example](/Users/misha/R/Data Viz/fp-ash/resources/EX_spat_vert_17.mov) ### not working
+
+# Linear Syllgisms
+```
+
+***
+
+> “We are more apt to make a grasping gesture when we speak of grasping an idea than when we speak of grasping a doorknob.” Benjamin Lee Whorf [^1]
+
+* People rountinely gesture, both in conversation with others and when thinking by themselves.[^2]
+
+* Gestures can be metaphorical, representing non-spatial attributes with spatial attributes, and some are analogical, representing non-spatial relations with spatial relations.[^3]
+
+
+#### **Do people gesture even when thinking about abstract, non-spatial relations?**
+
+#### **What factors influence the production of analogical co-thought gestures?**
+
+[^1]: Whorf, B. L. (1944) The Relation of Habitual Thought and Behavior to Language. Etc: A Review of General Semantics, 1(4), 197–215.
+
+[^2]: e.g., 
+Kita, S., Alibali, M. W., & Chu, M. (2017). How do gestures influence thinking and speaking? The gesture-for-conceptualization hypothesis. Psychological Review, 124(3), 245–266.
+
+[^3]: Cooperrider, K., & Goldin-Meadow, S. (2017). When Gesture Becomes Analogy. Topics in Cognitive Science, 9(3), 719–737.
+
+
+
+### Is it worth visualizing the basic structure of experimental design? {data-commentary-width=400}
+
+```{r study design tree, echo = FALSE}
+
+# create hierarchical data frame of IVs
+branch_1 <- data.frame(from = "origin", to = c("spatial", "non-spatial"))
+branch_2 <- data.frame(from = rep(branch_1$to, each = 2), to = paste(c("vertical", "horizontal"), seq(1:4), sep="_"))
+branch_3 <- data.frame(from = rep(branch_2$to, each = 3), to = paste(c("hard", "easy", "invalid"), seq(1:12), sep="_"))
+edges <- rbind(branch_1, branch_2, branch_3)
+
+### add frame with node information for labels and color info
+
+#labels <- edges %>%
+#  mutate(name = as.character(to)) %>%
+#  separate(col = name, into = c("label", "index"), sep = "_")
+
+# graph object
+tree <- graph_from_data_frame(edges)
+
+# dendrogram
+iv_dentro <- ggraph(tree, layout = 'dendrogram', circular = FALSE) + 
+  geom_edge_diagonal() +
+  geom_node_point() + #color = "#c7d4b6"
+  #geom_node_text(aes(color = labels$label) , angle=90 , hjust=1, nudge_y=-0.1) +
+  #geom_node_text(aes(label = labels$label, color = labels$label) , angle=90 , hjust=1, nudge_y=-0.1) +
+
+  #geom_node_point(aes(filter=leaf, size=value, color=group) , alpha=0.6) +
+  theme_void()
+
+# add fill aesthetic identifying relevant groups!
+iv_circles <- ggraph(tree, 'circlepack') + 
+    geom_node_circle(aes(), size = 0.25, n = 50) + 
+    coord_fixed() +
+    theme_void()
+
+ggarrange(iv_dentro, iv_circles, 
+          labels = c("tree", "nested circles"),
+          ncol = 2, nrow = 1)
+
+
+
+```
+
+
+***
+
+##### DESIGN
+
+* Within-subjects (2 x 2 x 3)
+
+  * spatiality of relations
+      + spatial
+      + non-spatial
+  * axis of relations
+      + vertical
+      + horizontal
+  * problem difficulty
+      + hard
+      + easy
+      + invalid
+      
+* (Blocked by problem type and axis with difficulty pseudorandomly interleaved.)
+      
+      
+##### 
+* Visualizations
+
+  + The factors of an experiment are typically described without visualization, particularly when there are more than two factors. When they are visualized, it is usually as a matrix grid. 
+  + Alternative visual forms may more readily capture the hierarchical structure of crossed multifactorial designs. 
+  + Thoughts about visualizing this structure? Is it helpful?
+  + Could also try a tree map with groups and subgroups.
+  + Need colors and labelling.
+
+
+
+### Linear syllogisms were used to systematically vary relation type and difficulty.
+
+![](/Users/misha/R/Data Viz/fp-ash/resources/waffles render fail.png)
+
+```{r waffles, include = FALSE}
+
+waffle_1 <- waffle(c("vertical (above / below)" = 10, 
+            "horizontal (left-of / right-of)" = 10,
+            "vertical (better / worse)" = 10,
+            "horizontal (earlier / later)" = 10), rows = 4, 
+         colors = c("#7b3294", "#008837", "#c2a5cf", "#a6dba0"), title = "type of relation")
+
+waffle_2  <- waffle(c(spatial = 20, "non-spatial" = 20), rows = 4, 
+         colors = c("#1f78b4", "#a6cee3"), title = "spatiality of relation")
+
+
+waffle_3 <- waffle(c("hard" = 16, "invalid" = 8, "easy" = 16), rows = 4, #use_glyph = "car", glyph_size = 6,
+         colors = c("#d95f02", "#DDDDDD", "#1b9e77"), title = "problem difficulty")
+
+ggarrange(waffle_1, waffle_2, waffle_3,
+          #labels = c("A", "B", "C"),
+          ncol = 1, nrow = 3)
+
+plot_grid(waffle_1, waffle_2, waffle_3, ncol = 1, align = "v")
+
+```
+
+
+***
+
+#### METHODS
+
+* After the experimenter left the room, participants solved 40 linear syllogisms, blocked by trial type (n = 24).
+
+* Each syllogism was presented for 10 seconds.
+
+* Participants solved each problem by saying “yes” if true, “no” if false, and “can’t tell” if invalid.
+
+* Data of participants was coded for response accuracy, gesture presense, and axis of gesturing.
+
+**Waffleplots not rendering** (shown as image).
+
+
+
+
+### Typical visualization of mean comparison results.
+
+```{r include = FALSE}
+# referencing image doesn't work with tilde expansion
+# use relative paths internal to repository!
+```
+
+![](/Users/misha/R/Data Viz/fp-ash/resources/production_standard-bars.png) 
+
+***
+
+* Spatial trials were more likely to elicit gesture (p = .002).
+
+* Trial axis did not affect gesture production (p = .14; not shown).
+
+
+
+
+### A limitation of barplots.
+
+![](/Users/misha/R/Data Viz/fp-ash/resources/barplot_psa1.jpg)
+
+***
+
+* As [Page Piccinini](https://pagepiccinini.com/2016/02/23/boxplots-vs-barplots/) and others have pointed out, barplots can hide the distribution of data!
+
+* Page suggests we abandon barplots in favor of boxplots.
+
+### Histograms
+
+```{r}
+
+```
+
+
+### Boxplots
+
+```{r subj means by trial type and axis, include = FALSE}
+# participant means by type and axis conditions
+prop_subj_gesture_type_axis <- study_01 %>%
+  dplyr::select(SUBJ, GESTURE_PRESENT, trial_type, item_axis) %>%
+  dplyr::group_by(SUBJ, trial_type, item_axis) %>%
+  dplyr::summarize(prop_gesture = sum(GESTURE_PRESENT)/10) 
+```
+
+```{r box plot 1, include = FALSE}
+p <- plot_ly(y = ~ prop_subj_gesture_type_axis$prop_gesture, 
+             type = "box", boxpoints = "all", jitter = 0.3,
+             pointpos = 0)
+
+p <- plot_ly(prop_subj_gesture_type_axis, x = ~ item_axis,
+             y = ~ prop_gesture, color = ~ trial_type, type = "box",
+             boxpoints = "all", jitter = 0.3, pointpos = 0) %>%
+  layout(boxmode = "group")
+
+p
+
+### leave out
+
+# knitr::include_graphics('/Users/misha/R/Data Viz/fp-ash/resources/dots.png')
+# ![](/Users/misha/R/Data Viz/fp-ash/resources/dots.png)
+
+```
+
+![](/Users/misha/R/Data Viz/fp-ash/resources/Rplot.png)
+
+
+***
+
+* Boxplot more clearly shows the distribution.
+
+* Datapoints seem unnecessary in this case: they do not further reveal the data and overlap at the extremes.
+
+
+### Using split violin plots to visualize distributions of mean comparisons.
+
+```{r violin 1, warning = FALSE, echo = FALSE}
+
+gesture_proportion_violin <- prop_subj_gesture_type_axis %>%
+  
+  plot_ly(type = 'violin') %>%
+  add_trace(
+    x = ~ item_axis[prop_subj_gesture_type_axis$trial_type == 'spatial'],
+    y = ~ prop_gesture[prop_subj_gesture_type_axis$trial_type == 'spatial'],
+    
+    legendgroup = 'spatial',
+    scalegroup = 'spatial',
+    name = 'spatial',
+    side = 'negative', # left side
+    opacity = 0.8,
+    box = list(
+      visible = T
+    ),
+    meanline = list(
+      visible = T
+    ),
+    line = list(
+      color = '#66c2a5' # selected from qualitative colorblind safe scheme from Color Brewer
+    )
+  ) %>%
+  
+  add_trace(
+    x = ~ item_axis[prop_subj_gesture_type_axis$trial_type == 'non-spatial'],
+    y = ~ prop_gesture[prop_subj_gesture_type_axis$trial_type == 'non-spatial'],
+    
+    legendgroup = 'non-spatial',
+    scalegroup = 'non-spatial',
+    name = 'non-spatial',
+    side = 'positive', # right side
+    opacity = 0.7,
+    box = list(
+      visible = T
+    ),
+    meanline = list(
+      visible = T
+    ),
+    line = list(
+      color = '#8da0cb' # selected from qualitative colorblind safe scheme from Color Brewer
+    )
+  ) %>% 
+  layout(
+    title = "Gesture Production by Trial Type<br><i>(proportion observations are grouped by subject)",
+    xaxis = list(
+      title = ""  
+    ),
+    yaxis = list(
+      title = "proportion of trials with gesture",
+      zeroline = F
+    ),
+    violingap = 0,
+    violingroupgap = 0.1,
+    violinmode = 'overlay', # because violins are split they need to be overlaid
+    tracegroupgap = 1
+  )
+
+gesture_proportion_violin
+```
+
+***
+
+* Not sure how kernel density estimation (KDE) is affecting this visualization, but the distribution extends beyond the range of the data.
+
+
+
+
+
+
+
+
+
+
+
+
+### Order effects (chronological)
+
+```{r order effect, include = FALSE}
+mean_gesture_chronology <- aggregate(study_01$GESTURE_PRESENT,
+                                     by = list(study_01$trial_number,
+                                               study_01$SPATIAL_FIRST),
+                                     FUN = 'mean')
+
+colnames(mean_gesture_chronology) <- c("trial_number","SPATIAL_FIRST", "mean_gesture")
+
+mean_gesture_chronology <- mean_gesture_chronology[order(mean_gesture_chronology$trial_number), ]
+
+
+mean_gesture_chronology %>%
+  
+  ggplot() +
+  
+    geom_point(aes(trial_number, mean_gesture,
+                   color = as.character(SPATIAL_FIRST)),
+               size = 1, alpha = 0.4, show.legend = FALSE) +
+  
+    geom_smooth(aes(trial_number, mean_gesture, color = as.character(SPATIAL_FIRST)),
+                size = 0.5, alpha = 0.25) +
+  
+    # geom_smooth(aes(trial_number, mean_gesture))
+  
+      # set theme
+      theme_minimal() +
+  
+      # change color scheme of fill colors
+      scale_fill_manual("spatial first", 
+                       values = wes_palette(n = 4, name = "Royal1")[3:4],
+                       labels = c("no", "yes")) +
+      
+      scale_color_manual("spatial first", 
+                       values = wes_palette(n = 4, name = "Royal1")[1:2],
+                       labels = c("no", "yes")) +
+  
+      scale_y_continuous(limits = c(0, 1)) +
+      
+      # add title, axis, and value labels
+      labs(x = "trial number", 
+           y = "mean gesture production", fill = "spatial first",
+           title = "gesture production by trial (chronological)") +
+     # scale_x_discrete(labels = c("HARD", "EASY")) +
+  
+      # adjust theme parameters
+      theme(panel.grid.major.x = element_blank(),
+          #panel.grid.minor.x = element_blank(),
+          legend.position = "right",
+          axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+          axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)),
+          axis.text.x = element_text(margin = margin(t = -10, r = 0, b = 0, l = 0)))
+
+```
+
+![](/Users/misha/R/Data Viz/fp-ash/resources/order and gesture.png)
+
+***
+
+* More gestures were produced when spatial relations are presented before abstract relations.
+
+* However, more gestures were produced in the spatial condition even when non-spatial relations were presented first.
+
+
+
+
+
+
+### SKETCHES (temp)
+
+```{r eval = FALSE}
+library(igraph)
+library(ggraph)
+
+dendrogram <- as.dendrogram(hclust(dist(iris[, 1:4])))
+
+ggraph(dendrogram, 'dendrogram') + 
+  geom_edge_elbow()
+
+ggraph(dendrogram, 'dendrogram', circular = TRUE) + 
+  geom_edge_elbow() + 
+  coord_fixed()
+
+
+dendro_data <- level_01_data %>%
+  select(SPACE_IV, AXIS_IV, DIFF_IV)
+
+dendro_study_design <- as.dendrogram(hclust(dist(dendro_data)))
+
+
+ggraph(dendro_study_design, 'dendrogram') + 
+  geom_edge_elbow()
+
+ggraph(dendro_study_design, 'dendrogram', circular = TRUE) + 
+  geom_edge_elbow() + 
+  coord_fixed()
+
+```
+
+
+```{r problem waffles, include = FALSE, eval = FALSE}
+waffle_1 <- iron(
+  
+   waffle(c("vertical (above / below)" = 10, 
+            "horizontal (left-of / right-of)" = 10,
+            "vertical (better / worse)" = 10,
+            "horizontal (earlier / later)" = 10), rows = 4, 
+         colors = c("#7b3294", "#008837", "#c2a5cf", "#a6dba0"), title = "type of relation"),
+  
+  waffle(c(spatial = 20, "non-spatial" = 20), rows = 4, 
+         colors = c("#1f78b4", "#a6cee3"), title = "spatiality of relation")
+)
+```
+
+
+
+
+
+

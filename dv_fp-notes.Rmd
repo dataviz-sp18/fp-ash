@@ -1,0 +1,99 @@
+---
+title: "dv_final-project"
+author: "Misha Ash"
+date: "5/28/2018"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+[final project requirements](https://github.com/uc-dataviz/course/blob/master/assignments/final-project.md)
+
+### presentation tasks
+
+- [x] use [flexdashboard storyboard](https://rmarkdown.rstudio.com/flexdashboard/using.html#storyboards)
+
+- [ ] use [relative paths!](https://gist.github.com/jennybc/362f52446fe1ebc4c49f) 
+
+
+
+### presentation outline
+
+- brief description of the study and design
+  - structure of trials: *dendrogram* (ggdendro)
+- descriptive stats
+  - mosaic charts?
+  - waffle charts?
+  - 
+- results
+  - typical presentation of mean differences
+  - downsides
+    - Piccinini's criticism of bar graphs
+  - adding data points (possible solution)
+    - problem: uninformative because of overlap
+    - [example](http://flowingdata.com/2015/08/11/real-chart-rules-to-follow/) of showing data
+  - violin plots (alternative)
+
+
+### final project outline
+
+### dataset encodings for final project
+
+```{r level 1 dataset encoding}
+# no interaction terms
+level_01_data <- study_01 %>%
+
+# INDEX VARs
+  
+  # ITEM: individual stimulus problem numbers
+  mutate(ITEM = as.integer(ITEM_CODE)) %>%
+  # LIST
+  mutate(LIST = LIST) %>%
+  # TRIAL
+  mutate(TRIAL = trial_number) %>%
+  # SUBJECT ID
+  mutate(ID = SUBJ) %>%
+
+# PRIMARY IVs
+
+  # SPATIALITY: spatial trials = 1, non-spatial trials = 0
+  mutate(SPACE_IV = if_else(study_01$trial_type == "spatial", 1, 0)) %>%
+  # AXIS: vertical trials = 1, horizontal trials = 0
+  mutate(AXIS_IV = if_else(study_01$item_axis == "vertical", 1, 0)) %>%
+  # DIFFICULTY: difficult trials = 2, easy trials = 1, invalid trials = 0
+  mutate(DIFF_IV = if_else(study_01$DIFFICULTY_with_invalid == "HARD", 2,
+                      if_else(study_01$DIFFICULTY_with_invalid == "EASY", 1, 0))) %>%
+
+  # ORDER: spatial first = 1, non-spatial first = 0
+  mutate(ORDER = as.integer(if_else(study_01$SPATIAL_FIRST == 1, 1, 0))) %>%
+  
+# SECONDARY IVs ## leaving this out for now
+  # difficulty based on deSoto (1965): HARDEST = 4, HARD = 3, EASY = 2, EASIEST = 1
+  #mutate(deSoto_difficulty_IV2 = cut(x = correct_deSoto_without_invalid, breaks = c(38.3, 41.5, 60.5, 61.8, 100),
+                                 #right = FALSE, labels = c(4, 3, 2, 1))) %>%
+  
+# DVs
+  # GESTURE_PRESENCE: present = 1, absent = 0
+  mutate(GESTURE_DV = if_else(study_01$gesture_presence == "yes", 1, 0)) %>%
+  # GESTURE_AXIS: lateral = 1, vertical = 2, saggital = 3, other/unclear = 4, ERROR = 5
+  mutate(AXIS_DV = if_else(study_01$gesture_axis == "lateral", 1, 
+                   if_else(study_01$gesture_axis == "vertical", 2,
+                   if_else(study_01$gesture_axis == "sagittal", 3, 
+                   if_else(study_01$gesture_axis == "other/unclear", 4, 5))))) %>%
+
+  # ACCURACY: correct = 1, incorrect = 0
+  mutate(ACCURACY_DV = if_else(study_01$ACCURACY == 1, 1, 0)) %>%
+  
+# SELECT VARIABLES
+  
+  select(ITEM, LIST, TRIAL, ID, 
+         SPACE_IV, AXIS_IV, DIFF_IV, 
+         ORDER, # deSoto_difficulty_IV2, 
+         GESTURE_DV, AXIS_DV, ACCURACY_DV)
+```
+
+
+
