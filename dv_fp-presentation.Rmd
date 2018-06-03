@@ -15,6 +15,7 @@ library(ggplot2)
 library(ggraph)
 library(igraph)
 library(waffle)
+library(extrafont)
 library(plotly)
 
 library(ggpubr)
@@ -148,18 +149,36 @@ ggarrange(iv_dentro, iv_circles,
 
 ```{r waffles, include = FALSE}
 
+
+font_import()
+
+
 waffle_1 <- waffle(c("vertical (above / below)" = 10, 
             "horizontal (left-of / right-of)" = 10,
             "vertical (better / worse)" = 10,
             "horizontal (earlier / later)" = 10), rows = 4, 
+         colors = c("#7b3294", "#008837", "#c2a5cf", "#a6dba0"), 
+         title = "type of relation", xlab = "1 sq = 1 problem", use_glyph = "asterisk")
+
+waffle_1
+
+waffle_1 <- waffle(c("vertical (above / below)" = 5, "vertical (above / below)" = 5, 
+            "horizontal (left-of / right-of)" = 5,"horizontal (left-of / right-of)" = 5,
+            "vertical (better / worse)" = 10,
+            "horizontal (earlier / later)" = 10), rows = 4, 
          colors = c("#7b3294", "#008837", "#c2a5cf", "#a6dba0"), title = "type of relation")
+
+
 
 waffle_2  <- waffle(c(spatial = 20, "non-spatial" = 20), rows = 4, 
          colors = c("#1f78b4", "#a6cee3"), title = "spatiality of relation")
 
+waffle_2
 
 waffle_3 <- waffle(c("hard" = 16, "invalid" = 8, "easy" = 16), rows = 4, #use_glyph = "car", glyph_size = 6,
          colors = c("#d95f02", "#DDDDDD", "#1b9e77"), title = "problem difficulty")
+
+waffle_3
 
 ggarrange(waffle_1, waffle_2, waffle_3,
           #labels = c("A", "B", "C"),
@@ -278,7 +297,7 @@ gesture_proportion_violin <- prop_subj_gesture_type_axis %>%
     side = 'negative', # left side
     opacity = 0.8,
     box = list(
-      visible = T
+      visible = F
     ),
     meanline = list(
       visible = T
@@ -298,7 +317,7 @@ gesture_proportion_violin <- prop_subj_gesture_type_axis %>%
     side = 'positive', # right side
     opacity = 0.7,
     box = list(
-      visible = T
+      visible = F
     ),
     meanline = list(
       visible = T
@@ -310,19 +329,36 @@ gesture_proportion_violin <- prop_subj_gesture_type_axis %>%
   layout(
     title = "Gesture Production by Trial Type<br><i>(proportion observations are grouped by subject)",
     xaxis = list(
-      title = ""  
+      title = ""
     ),
     yaxis = list(
       title = "proportion of trials with gesture",
-      zeroline = F
+      zeroline = F,
+      range = c(0, 1)
     ),
     violingap = 0,
     violingroupgap = 0.1,
     violinmode = 'overlay', # because violins are split they need to be overlaid
-    tracegroupgap = 1
+    tracegroupgap = 1,
+    margin = list(
+  l = -1,
+  r = 0,
+  b = -1,
+  t = -5,
+  pad = 0
+)
   )
 
 gesture_proportion_violin
+
+ggsave('gest_space_violin.png', device = png, path = "/Users/misha/R/Data Viz/fp-ash/resources", 
+       width = 5, height = 3, units = "in")
+
+library(webshot)
+export(gesture_proportion_violin, file = "gest_space_violin.png")
+
+plotly_IMAGE(gesture_proportion_violin, width = 1200, height = 700, format = "png", scale = 2,
+             out_file = "/Users/misha/R/Data Viz/fp-ash/resources/gest_space_violin.png")
 ```
 
 ***
