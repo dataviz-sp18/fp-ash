@@ -7,27 +7,28 @@ output:
 #    toc: true
 #    toc_float:
 #      collapsed: true
-    
-    theme: lumen
+    theme: lux
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 library(rmarkdown)
+#library(extrafont)
 
 library(ggplot2)
+library(ggsignif)
+library(plotly)
+
 library(ggraph)
 library(igraph)
 library(waffle)
-library(extrafont)
-library(plotly)
 
-library(ggpubr)
+library(ggpubr) # using for nested circles? ggarrange
 library(cowplot)
-
 library(wesanderson)
 
+library(data.table)
 library(tidyverse)
 
 set.seed(1618)
@@ -38,45 +39,386 @@ set.seed(1618)
 study_01 <- read_csv("~/R/Data Viz/fp-ash/data/study-01_level-01-data_2018-05-28.csv")
 ```
 
+```{r recode elan data, include = FALSE}
+# encode gesture presence and spatiality as dichotomous indicator variables
 
-
-
-
-
-
-
-
-### Exploring conceptualization through the lens of spontaneous co-thought gestures produced during abstract relational reasoning. {data-commentary-width=350}
-
-![](/Users/misha/R/Data Viz/fp-ash/resources/intro_image.png)
-
-```{r include = FALSE, eval = FALSE}
-# ! remove video from repo after presentation
-
-# ![example](/Users/misha/R/Data Viz/fp-ash/resources/EX_spat_vert_17.mov) ### not working
-
-# Linear Syllgisms
+study_01 <- study_01 %>%
+  
+  # encode as data frame
+  #as_data_frame() %>%
+  
+  # add dichotomous variables
+  mutate(GESTURE_PRESENT = if_else(study_01$`gesture_presence` == "yes", 1, 0)) %>%
+  mutate(SPATIAL_TRIAL = if_else(study_01$trial_type == "spatial", 1, 0)) %>%
+  mutate(VERTICAL_TRIAL = if_else(study_01$item_axis == "vertical", 1, 0)) %>%
+  
+  # add difficulty variable based on deSoto (1965)
+  mutate(deSoto_difficulty = cut(x = correct_deSoto_without_invalid, breaks = c(38.3, 41.5, 60.5, 61.8, 100),
+                                 right = FALSE, labels = c("HARDEST", "HARD", "EASY", "EASIEST")))
 ```
 
-***
+```{r gesture_type_axis subset, include = FALSE}
+# select variables of interest
+gesture_type_axis <- study_01 %>%
+  dplyr::select(SUBJ, LIST, trial_number, ITEM_CODE, SPATIAL_TRIAL, VERTICAL_TRIAL, SPATIAL_FIRST, 
+         GESTURE_PRESENT, gesture_axis, ACCURACY, 
+         difficulty_indicator_without_invalid, correct_deSoto_without_invalid, deSoto_difficulty)
 
-> “We are more apt to make a grasping gesture when we speak of grasping an idea than when we speak of grasping a doorknob.” Benjamin Lee Whorf [^1]
+```
 
-* People rountinely gesture, both in conversation with others and when thinking by themselves.[^2]
+```{r gesture_type_axis_coded factor encodings, include = FALSE, eval = FALSE}
+# encoding trial spatiality and axis as factors 
 
-* Gestures can be metaphorical, representing non-spatial attributes with spatial attributes, and some are analogical, representing non-spatial relations with spatial relations.[^3]
+gesture_type_axis_coded <- gesture_type_axis
+gesture_type_axis_coded$SPATIAL_TRIAL <- factor(gesture_type_axis_coded$SPATIAL_TRIAL, 
+                                                levels = c(0, 1), 
+                                                labels = c("nonspatial", "spatial"))
+
+gesture_type_axis_coded$VERTICAL_TRIAL <- factor(gesture_type_axis_coded$VERTICAL_TRIAL, 
+                                                levels = c(0, 1), 
+                                                labels = c("horizontal", "vertical"))
+
+#gesture_type_axis_coded$GESTURE_PRESENT <- factor(gesture_type_axis_coded$GESTURE_PRESENT, 
+ #                                               levels = c(0, 1))
+
+# variable types list
+gesture_type_axis_coded_VARs <- gesture_type_axis_coded %>% 
+  summarize_all(typeof) %>% 
+  gather()
+
+```
+
+```{r mean proportion of gesture production by trial type, include = FALSE}
+prop_gesture_type_axis <- study_01 %>%
+  dplyr::select(GESTURE_PRESENT, trial_type, item_axis) %>%
+  dplyr::group_by(trial_type, item_axis) %>%
+  dplyr::summarize(prop_gesture = sum(GESTURE_PRESENT)/240) 
+```
+
+```{r gesture & accuracy by subject, include = FALSE}
+# calculate gesture and accuracy proportions by subject
+mean_subject_errors_gestures <- study_01 %>%
+  dplyr::select(SUBJ, GESTURE_PRESENT, ACCURACY) %>%
+  dplyr::group_by(SUBJ) %>%
+  dplyr::summarize(gestures = sum(GESTURE_PRESENT), 
+                   percent_gestured = gestures / length(unique(study_01$ITEM_CODE)),
+                   gesture_se = sd(GESTURE_PRESENT)/sqrt(length(unique(study_01$ITEM_CODE))),
+                   
+                   errors = length(unique(study_01$ITEM_CODE)) - sum(ACCURACY),
+                   percent_errors = errors / length(unique(study_01$ITEM_CODE)),
+                   error_se = sd(1 - ACCURACY)/sqrt(length(unique(study_01$ITEM_CODE)))
+                   ) %>%
+
+  as_factor(SUBJ) %>%
+ 
+  # order by proportion
+  dplyr::arrange(percent_gestured) %>%
+  # add se variables for gesture production and error
+  dplyr::mutate(percent_gestured = gestures / length(unique(study_01$ITEM_CODE)),
+                percent_errors = errors / length(unique(study_01$ITEM_CODE))) %>%
+ 
+  # add variable to relabel x axis sequentially
+  dplyr::mutate(ID_gestures_ascending = as.integer(seq(1:length(unique(study_01$SUBJ))))) %>%
+  
+  dplyr::arrange(percent_errors) %>%
+  
+  dplyr::mutate(ID_errors_ascending = as.integer(seq(1:length(unique(study_01$SUBJ))))) %>%
+  # could not get color to work without adding a constant
+  dplyr::mutate(fill_constant = 1)
 
 
-#### **Do people gesture even when thinking about abstract, non-spatial relations?**
+summary_subj_err_gest <- mean_subject_errors_gestures %>%
+  dplyr::summarize(mean_gestures = mean(gestures), 
+                   mean_percent_gestured = mean(percent_gestured),
+                   mean_gesture_se = mean(gesture_se),
+                   
+                   mean_errors = mean(errors),
+                   mean_percent_errors = mean(percent_errors),
+                   mean_error_se = mean(error_se))
+```
 
-#### **What factors influence the production of analogical co-thought gestures?**
+```{r subj means by trial type and axis, include = FALSE}
+# participant means by type and axis conditions
+prop_subj_gesture_type_axis <- study_01 %>%
+  dplyr::select(SUBJ, GESTURE_PRESENT, trial_type, item_axis) %>%
+  dplyr::group_by(SUBJ, trial_type, item_axis) %>%
+  dplyr::summarize(prop_gesture = sum(GESTURE_PRESENT)/10) 
+```
 
-[^1]: Whorf, B. L. (1944) The Relation of Habitual Thought and Behavior to Language. Etc: A Review of General Semantics, 1(4), 197–215.
+```{r level 1 data, include = FALSE}
+# no interaction terms
+level_01_data <- study_01 %>%
 
-[^2]: e.g., 
-Kita, S., Alibali, M. W., & Chu, M. (2017). How do gestures influence thinking and speaking? The gesture-for-conceptualization hypothesis. Psychological Review, 124(3), 245–266.
+# INDEX VARs
+  
+  # ITEM: individual stimulus problem numbers
+  mutate(ITEM = as.integer(ITEM_CODE)) %>%
+  # LIST
+  mutate(LIST = LIST) %>%
+  # TRIAL
+  mutate(TRIAL = trial_number) %>%
+  # SUBJECT ID
+  mutate(ID = SUBJ) %>%
+
+# PRIMARY IVs
+
+  # SPATIALITY: spatial trials = 1, non-spatial trials = 0
+  mutate(SPACE_IV = if_else(study_01$trial_type == "spatial", 1, 0)) %>%
+  # AXIS: vertical trials = 1, horizontal trials = 0
+  mutate(AXIS_IV = if_else(study_01$item_axis == "vertical", 1, 0)) %>%
+  # DIFFICULTY: difficult trials = 2, easy trials = 1, invalid trials = 0
+  mutate(DIFF_IV = if_else(study_01$DIFFICULTY_with_invalid == "HARD", 2,
+                      if_else(study_01$DIFFICULTY_with_invalid == "EASY", 1, 0))) %>%
+
+  # ORDER: spatial first = 1, non-spatial first = 0
+  mutate(ORDER = as.integer(if_else(study_01$SPATIAL_FIRST == 1, 1, 0))) %>%
+  
+# SECONDARY IVs ## leaving this out for now
+  # difficulty based on deSoto (1965): HARDEST = 4, HARD = 3, EASY = 2, EASIEST = 1
+  #mutate(deSoto_difficulty_IV2 = cut(x = correct_deSoto_without_invalid, breaks = c(38.3, 41.5, 60.5, 61.8, 100),
+                                 #right = FALSE, labels = c(4, 3, 2, 1))) %>%
+  
+# DVs
+  # GESTURE_PRESENCE: present = 1, absent = 0
+  mutate(GESTURE_DV = if_else(study_01$gesture_presence == "yes", 1, 0)) %>%
+  # GESTURE_AXIS: lateral = 1, vertical = 2, saggital = 3, other/unclear = 4, ERROR = 5
+  mutate(AXIS_DV = if_else(study_01$gesture_axis == "lateral", 1, 
+                   if_else(study_01$gesture_axis == "vertical", 2,
+                   if_else(study_01$gesture_axis == "sagittal", 3, 
+                   if_else(study_01$gesture_axis == "other/unclear", 4, 5))))) %>%
+
+  # ACCURACY: correct = 1, incorrect = 0
+  mutate(ACCURACY_DV = if_else(study_01$ACCURACY == 1, 1, 0)) %>%
+  
+# SELECT VARIABLES
+
+  dplyr::select(ITEM, LIST, TRIAL, ID, 
+         SPACE_IV, AXIS_IV, DIFF_IV, 
+         ORDER, # deSoto_difficulty_IV2, 
+         GESTURE_DV, AXIS_DV, ACCURACY_DV)
+```
+
+```{r X gesture & accuracy by subject, include = FALSE}
+# calculate gesture and accuracy proportions by subject
+X <- level_01_data %>%
+  #dplyr::select(SUBJ, GESTURE_DV, ACCURACY_DV) %>%
+
+  dplyr::group_by(ID, SPACE_IV) %>%
+  dplyr::summarize(gestures = sum(GESTURE_DV), 
+                   percent_gestured = gestures / (length(unique(ITEM))*2),
+                   gesture_se = sd(GESTURE_DV)/sqrt((length(unique(ITEM)))*2),
+                   
+                   errors = length(unique(ITEM)) - sum(ACCURACY_DV),
+                   percent_errors = errors / (length(unique(ITEM))*2),
+                   error_se = sd(1 - ACCURACY_DV)/sqrt((length(unique(ITEM)))*2)
+                   ) %>%
+
+  as_factor(ID)
+```
+
+```{r table gesture type axis se, include = FALSE}
+# table with standard errors (for plotting)
+table_gesture_type_axis <- study_01 %>%
+  dplyr::select(GESTURE_PRESENT, trial_type, item_axis) %>%
+  data.table()
+
+## aovSufficient(prop_gesture ~ trial_type + item_axis, data = prop_SUBJ_gesture_type_axis)
+
+tbl_gesture_type_axis <- table_gesture_type_axis[, list(mean = mean(GESTURE_PRESENT), 
+                               sd = sd(GESTURE_PRESENT),
+                               se = sqrt(var(GESTURE_PRESENT)/length(GESTURE_PRESENT)),
+                               se_test = sd(GESTURE_PRESENT)/sqrt(240),
+                               #95% confidence intervals of the mean (&plusmn;2se)
+                               ci_min = mean(GESTURE_PRESENT) - 2*(sd(GESTURE_PRESENT)/sqrt(240)),
+                               ci_max = mean(GESTURE_PRESENT) + 2*(sd(GESTURE_PRESENT)/sqrt(240))),
+                        by=list(trial_type, item_axis)]
+
+```
+
+### introduction
+
+#### background
+
+> “We are more apt to make a grasping gesture when we speak of grasping an idea than when we speak of grasping a doorknob.” Benjamin Lee Whorf [^0]
+
+My thesis project is organized around a study that explores the way people conceptualize relations. To do this, we observe the spontaneous gestures people produce while solving reasoning problems called linear syllogisms.[^1] People rountinely gesture, both in conversation with others and when thinking by themselves.[^2] Gestures can be metaphorical, representing non-spatial attributes with spatial attributes, and some are analogical, representing non-spatial relations with spatial relations.[^3] Our key questions are whether people gesture when engaging in relational thinking, as required by the linear syllogisms, and if so, whether the kind of relation being reasoned about will influence the production of gestures? For the purposes of this project, we look at one of the important aspects of the data: gesture production across relation type conditions.[^4] The group means across these conditions were compared with ANOVAs.
+
+[^0]: Whorf, B. L. (1944) The Relation of Habitual Thought and Behavior to Language. Etc: A Review of General Semantics, 1(4), 197–215.
+
+[^1]: Linear syllogisms are solved via transitive inference. One possible form of a 3-term linear syllogism is aRb, bRc, aRc. In our experiment, these forms were expressed in natural language as follows: Siri is better than Alexa. Cortana is worse than Alexa. Is Cortana better than Siri? Our problem set consisted of 40 3-term linear syllogisms that systematically varied in terms of relation, axis, and difficulty.
+
+[^2]: e.g., Kita, S., Alibali, M. W., & Chu, M. (2017). How do gestures influence thinking and speaking? The gesture-for-conceptualization hypothesis. Psychological Review, 124(3), 245–266.
 
 [^3]: Cooperrider, K., & Goldin-Meadow, S. (2017). When Gesture Becomes Analogy. Topics in Cognitive Science, 9(3), 719–737.
+
+[^4]: Relations were either spatial (above/below and left/right) or non-spatial (better/worse and earlier/later), and either along the horizontal axis (left/right and earlier/later) or vertical axis (above/below and better/worse).
+
+#### visualization question
+
+As we saw throughout the course, many choices are made in the course of designing data visualizations, including in scientific contexts. One of the most basic questions pertains to the choice of visual form, which is what I will explore here. In class, we mostly discussed relationships among continuous variables when it comes to this. The data I work with here has a discrete response variable (presense/absence of gesture on a given trial) that I put on a continuous scale as a proportion of trials on which gesture is present. The independent variables or predictors are likewise discrete and will be treated as discrete. Here I will focus on two of them: relation type (spatial vs non-spatial) and axis (horizontal vs vertical), with more focus on the former. My main interest for this project is to consider some of the nuances and alternative possibilities for visualizing this information.
+
+### distributions
+
+An important and valuable visualization task involves representing distributions. 
+
+```{r production histo 1, echo = FALSE}
+mean_subject_errors_gestures %>%
+  
+  ggplot() +
+  
+  geom_col(aes(x = ID_gestures_ascending, y = percent_gestured, # group = SUBJ, 
+                 fill = as.factor(fill_constant), alpha = .75)) +
+
+    scale_y_continuous(expand = c(0, 0)) +
+    scale_x_continuous(breaks = c(seq(1:24)), expand = c(0, 0)) +
+  
+    # change color scheme of fill colors
+    scale_fill_manual("fill_constant", values ="#a2adba") +
+  
+    theme_light(base_family = "Serif") +
+  
+    theme(panel.grid.major.x = element_blank(), # remove vertical grid lines
+        panel.grid.minor.x = element_blank(), # remove vertical grid lines
+        panel.grid.minor.y = element_blank(), # remove minor horizontal grid lines
+        # remove legends (unnecessary here)
+        legend.position = "none", 
+        plot.title = element_text(margin = margin(t = 0, r = 0, b = 20, l = 0)),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)), 
+        axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)), 
+        panel.border = element_blank(), # remove outer panel border
+        axis.ticks.y = element_blank(), # remove ticks from y axis
+        text = element_text(family = "Arial")) +
+  
+    ggtitle('PARTICIPANT GESTURE PRODUCTION') +
+    xlab('participant (arranged by ascending gesture production)') +
+    ylab('proportion of trials with gesture')
+```
+
+This chart was designed as a `ggplot2` object, making use of a wide range of parameters. In line with Tufte's theory of data-ink ratio minimization, `theme_light()` was used to strip away the default background fill. Additional chart junk was removed as well, including all x-axis gridlines and the minor y-axis grid lines. The latter was removed in accordance with the findings of [Heer and Bostock (2010)](http://vis.stanford.edu/files/2010-MTurk-CHI.pdf) about the limits of added accuracy from gridlines. I attempted to enhance the ease of reading bars that are not directly adjacent to the gridlines by slightly reducing their opacity (`alpha = .75`). Tick marks were maintained along the x-axis to connect the labels with bars in an explicit way, as they do not appear to add to chart junk in a significant way while highlighting the absence of the first three bars. To develop the aesthetics of the chart, I chose a neutral but attactive hex-based color. 
+
+Note that this is a bar chart, not a histogram. It was generated with a `geom_col` layer. Strictly speaking, it is not a distribution, for it shows a value for each participant (proportion of trials during which they produced a gesture), whereas a histogram would instead show the distribution of gesture production as, for example, the number of trials along the x-axis (0 - 40) and the number of participants in each bin. Arguably, this chart is more informative. The order of bars was arranged in ascending order to foreground gesture production across participants, enabling comparisons comparable to those of a histogram while also showing individual level statistics. For example, we can see that all but 3 participants (87.5%) gestured on at least one trial. We also see that half of the participants gestured on more than half of the trials, and nearly half (41.7%) gestured on over two-thirds of the trials.
+
+I make some further refinements to this chart, as follows:
+
+```{r production histo 2, echo = FALSE} 
+
+production_histo_2 <- X %>%
+  
+  ggplot(aes(alpha = .85)) +
+
+  geom_col(aes(x = reorder(ID, percent_gestured), y = percent_gestured, #group = SUBJ, 
+                 fill = as.factor(SPACE_IV))) +
+
+    # change color scheme of fill colors
+    scale_fill_manual(name = "relation type",
+                      # guide = guide_legend(reverse=TRUE) # reverse order of legend key (off)
+                      labels = c("non-spatial", "spatial"), 
+                      values = c("#8da0cb", "#66c2a5")) +
+  
+    scale_y_continuous(expand = c(0, 0)) +
+  
+  geom_hline(aes(yintercept = mean(percent_gestured)*2), color = "#717982") + #a2adba too light, took darker shade
+  
+# temporarily remove ribbon (need to fix error margin)
+ #   annotate('ribbon', x = c(-Inf, Inf), 
+  #           ymin = summary_subj_err_gest$mean_percent_gestured - summary_subj_err_gest$mean_gesture_se, 
+   #          ymax = summary_subj_err_gest$mean_percent_gestured + summary_subj_err_gest$mean_gesture_se, 
+    #         alpha = 0.2, fill = "#628B9F") +
+  
+  geom_text(x = 4, y = 0.56, aes(label = "mean = 0.524"), color = "#717982") + #a2adba too light, took darker shade
+
+    theme_light(base_family = "Serif") +
+  
+    theme(panel.grid.major.x = element_blank(), # remove vertical grid lines
+        panel.grid.minor.x = element_blank(), # remove vertical grid lines
+        panel.grid.minor.y = element_blank(), # remove minor horizontal grid lines
+        # panel.grid.major.y = element_line(2),
+        legend.position = "right",
+        plot.title = element_text(margin = margin(t = 0, r = 0, b = 30, l = 0)),
+        axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)), 
+        axis.title.x = element_text(margin = margin(t = 10, r = 0, b = -5, l = 0)), 
+        panel.border = element_blank(), # remove outer panel border
+        axis.ticks.y = element_blank(), # remove ticks from y axis
+        text = element_text(family = "Times")) +
+    guides(alpha = FALSE) + # remove alpha legend (doesn't provide useful information)
+  
+    ggtitle('PARTICIPANT GESTURE PRODUCTION') +
+    xlab('participant id (arranged by total gesture production)\n') +
+    ylab('proportion of trials with gesture')
+  
+production_histo_2
+```
+
+For this chart, I incorporated some further design considerations. To enhance the *truthfulness* of the chart I relabeled the bars to correspond to participant id numbers. After all, the x-axis is a discrete, nominal variable, not to be confused with a binned continuous variable (as a histogram would show) or an ordinal variable. The ordinality here is artificial---a function of the ascending ordering of the participants by magnitude of the y value. Maintaining participant ids prevents this from being obscured. It can be misunderstood even with the explicit x-axis label by implying a false correspondence between participant number (as counted after being arranged, like in the previous chart) and the proportion of trials on which the participant gestured. There is no such correlation in the data. 
+
+I also enhanced the *insightfulness* of the chart with additional two elements. First, I split the groups by the variable of interest, relation type, using the color channel. This enables one to distinguish approximately how much of a given participant's gesturing occurs in each condition. It also gives a sense of a broader pattern: that gestures are more likely to be produced on trials with the spatial relation type. The second element added to make the chart more informative is a horizontal line representing the mean proportion of trials with gesture, which allows the reader to immediately see that, on average, gestures were elicited in just over half of all trials.
+
+In addition to the aesthetics applied in the previous chart, here I chose colors that are pleasant while discernable to the colorblind reader (based on Color Brewer pallettes). I also adjusted the font type to a serif family, based on Turfte's claim that they are more readable (as corroborated by some results we reviewed in class). 
+
+### means
+
+#### bar charts
+
+
+A typical approach to representing these results is with a bar graph that includes standard error bars, like so:
+
+```{r traditional bar chart, include = FALSE}
+
+prop_gesture_type_axis %>%
+
+  full_join(tbl_gesture_type_axis) %>%
+
+  ggplot(aes(item_axis, prop_gesture, 
+             fill = trial_type)) +
+      
+      geom_col(aes(width = 0.5), 
+               alpha = 0.75, 
+               position = position_dodge(width = 0.55)) +
+    
+ #     geom_point(data = prop_SUBJ_gesture_type_axis,
+  #               position = position_jitterdodge(jitter.width = 0.15),
+   #              aes(color = item_axis), 
+    #             size = 1.5, alpha = 0.7, shape = 21, show_guide = FALSE) +  #, color = "#736A6A") +
+
+      # add 95% confidence interval error bars
+      geom_errorbar(aes(ymin = ci_min, ymax = ci_max), 
+                    width = 0.1, position = position_dodge(0.55),
+                    color = "#767676") +
+  
+      # add numerical values onto bars
+      geom_text(aes(label = sprintf("%0.2f", round(prop_gesture, digits = 2)), 
+                    y = prop_gesture + 0.1,
+                    group = trial_type,
+                    fontface = "bold"), 
+                    position = position_dodge(0.55),
+                    color = "#767676") +
+  
+
+      theme_minimal(base_family = "serif") + # set theme and serif font
+
+      scale_fill_manual("item axis", 
+                       values = c("#66c2a5", "#8da0cb")) +
+      
+      scale_color_manual("item axis", 
+                      values = c("#66c2a5", "#8da0cb")) +
+      
+      # add title, axis, and value labels
+      labs(x = "trial type", 
+           y = "proportion of trials with gesture", fill = "item axis",
+           title = "gesture production by trial type") +
+     # scale_x_discrete(labels = c("HARD", "EASY")) +
+  
+      # adjust theme parameters
+      theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          legend.position = "bottom",
+          axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)),
+          axis.title.x = element_text(margin = margin(t = 15, r = 0, b = 0, l = 0)),
+          axis.text.x = element_text(margin = margin(t = -10, r = 0, b = 0, l = 0)))
+```
+
+
+
 
 
 
@@ -174,8 +516,8 @@ waffle_1 <- waffle(c("vertical (above / below)" = 10,
 
 waffle_1
 
-waffle_1 <- waffle(c("vertical (above / below)" = 5, "vertical (above / below)" = 5, 
-            "horizontal (left-of / right-of)" = 5,"horizontal (left-of / right-of)" = 5,
+waffle_1 <- waffle(c("vertical (above / below)" = 10, # "vertical (above / below)" = 5, 
+            "horizontal (left-of / right-of)" = 10, # "horizontal (left-of / right-of)" = 5,
             "vertical (better / worse)" = 10,
             "horizontal (earlier / later)" = 10), rows = 4, 
          colors = c("#7b3294", "#008837", "#c2a5cf", "#a6dba0"), title = "type of relation")
@@ -192,9 +534,9 @@ waffle_3 <- waffle(c("hard" = 16, "invalid" = 8, "easy" = 16), rows = 4, #use_gl
 
 waffle_3
 
-ggarrange(waffle_1, waffle_2, waffle_3,
-          #labels = c("A", "B", "C"),
-          ncol = 1, nrow = 3)
+#ggarrange(waffle_1, waffle_2, waffle_3,
+#          labels = c("A", "B", "C"),
+#          ncol = 1, nrow = 3)
 
 plot_grid(waffle_1, waffle_2, waffle_3, ncol = 1, align = "v")
 
@@ -254,14 +596,6 @@ plot_grid(waffle_1, waffle_2, waffle_3, ncol = 1, align = "v")
 
 
 ### Boxplots
-
-```{r subj means by trial type and axis, include = FALSE}
-# participant means by type and axis conditions
-prop_subj_gesture_type_axis <- study_01 %>%
-  dplyr::select(SUBJ, GESTURE_PRESENT, trial_type, item_axis) %>%
-  dplyr::group_by(SUBJ, trial_type, item_axis) %>%
-  dplyr::summarize(prop_gesture = sum(GESTURE_PRESENT)/10) 
-```
 
 ```{r box plot 1, include = FALSE}
 p <- plot_ly(y = ~ prop_subj_gesture_type_axis$prop_gesture, 
