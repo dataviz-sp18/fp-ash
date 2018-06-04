@@ -620,11 +620,18 @@ Future improvements:
 
 There is still plenty of room for improvement, but *the split violin plot seems to be a viable alternative form for representing mean comparisons*. One shortcoming may be the comparability both within and across groups in a two-way comparison, which is enabled by bar graphs. I suspect this is more difficult because of the visual juxtoposition across space that is required to compare the distribution. However, it does not seem this detracts from the possibility of comparing the means, which is the only thing a bar graph enables in this context. Therefore, even if true, this is only a fault to the extent that the distributions provide additional details that may distract from such comparisons, thereby making them more difficult.[^7] This is likely to be a matter that is significantly affected by the audience for which the visualization is intended. In this case, the intended audience is one of scientists. Even so, many of the basic visualization design considerations should apply, for scientists, for all their training, are human, and they are likely to be affected by the same perceptual features that affect the layperson (although their experience no doubt plays a role in the facility with which they can interpret visualizations of data, particularly in their domain of expertise).
 
+***
+***
+***
+
+```{r}
+print(sessionInfo())
+```
+
 
 ***
 ***
-***
-#### MISCELLANEOUS VESTIGES FROM RELATED EFFORTS
+#### MISCELLANEOUS VESTIGES FROM RELATED EFFORTS (delete)
 
 ##### STUDY DESIGN
 
@@ -752,7 +759,7 @@ plot_grid(waffle_1, waffle_2, waffle_3, ncol = 1, align = "v")
 
 
 ```{r gesture AXIS trial AXIS, include = FALSE}
-study_01 %>%
+axis_stack <- study_01 %>%
   dplyr::select(gesture_axis, item_axis, trial_type) %>%
   filter(!is.na(gesture_axis)) %>%
   group_by(item_axis, trial_type, gesture_axis) %>%
@@ -797,6 +804,12 @@ study_01 %>%
     
 ```
 
+```{r axis stack, include = FALSE}
+axis_stack
+```
+
+* Gestures tend to be along the same axis as that of the stimulus.
+
 Typical visualization of mean comparison results.
 
 ```{r include = FALSE}
@@ -806,14 +819,13 @@ Typical visualization of mean comparison results.
 
 ![](/Users/misha/R/Data Viz/fp-ash/resources/production_standard-bars.png) 
 
-### ORDER EFFECTS (chronological)
+#### ORDER EFFECTS (chronological)
 
 ![](/Users/misha/R/Data Viz/fp-ash/resources/gest-order.png)
 
 * More gestures were produced when spatial relations are presented before abstract relations.
 
 * However, more gestures were produced in the spatial condition even when non-spatial relations were presented first.
-
 
 ***
 ***
